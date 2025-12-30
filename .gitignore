@@ -1,0 +1,123 @@
+# ===== General =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.log
+*.tmp
+*.temp
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# ===== Environment Variables =====
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ===== Flutter (circle_app) =====
+circle_app/.dart_tool/
+circle_app/.packages
+circle_app/.pub-cache/
+circle_app/.pub/
+circle_app/build/
+circle_app/.flutter-plugins
+circle_app/.flutter-plugins-dependencies
+circle_app/*.iml
+circle_app/.metadata
+circle_app/pubspec.lock
+
+# Flutter/Dart generated files
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+**/GeneratedPluginRegistrant.*
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart
+
+# Android
+circle_app/android/.gradle/
+circle_app/android/local.properties
+circle_app/android/**/GeneratedPluginRegistrant.java
+circle_app/android/key.properties
+circle_app/android/**/*.keystore
+!circle_app/android/gradle/wrapper/gradle-wrapper.jar
+
+# iOS
+circle_app/ios/.symlinks/
+circle_app/ios/Pods/
+circle_app/ios/Flutter/Flutter.framework
+circle_app/ios/Flutter/Flutter.podspec
+circle_app/ios/ServiceDefinitions.json
+circle_app/ios/Runner/GeneratedPluginRegistrant.*
+circle_app/ios/Podfile.lock
+
+# macOS
+circle_app/macos/Flutter/ephemeral/
+circle_app/macos/Pods/
+circle_app/macos/Podfile.lock
+
+# Linux
+circle_app/linux/flutter/ephemeral/
+
+# Windows
+circle_app/windows/flutter/ephemeral/
+
+# Web
+circle_app/web/*.dart.js
+circle_app/web/*.dart.js.map
+
+# ===== Next.js (backend) =====
+backend/node_modules/
+backend/.next/
+backend/out/
+backend/build/
+backend/.vercel
+backend/*.tsbuildinfo
+backend/next-env.d.ts
+
+# Next.js cache
+backend/.cache/
+
+# ===== Node.js =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ===== Testing =====
+coverage/
+*.lcov
+.nyc_output/
+
+# ===== Build outputs =====
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ===== Secrets & Keys =====
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+credentials/
