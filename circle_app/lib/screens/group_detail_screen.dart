@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 import '../models/group.dart';
 import '../models/bill.dart';
 import '../services/group_service.dart';
@@ -9,7 +10,6 @@ import 'bill_detail_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
-
   const GroupDetailScreen({super.key, required this.groupId});
 
   @override
@@ -44,15 +44,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       _isLoading = true;
       _error = null;
     });
-
     final results = await Future.wait([
       GroupService.getGroup(widget.groupId),
       BillService.getBills(widget.groupId),
     ]);
-
     setState(() {
       _isLoading = false;
-
       final groupResult = results[0] as GroupResult<Group>;
       if (groupResult.success) {
         _group = groupResult.data;
@@ -60,11 +57,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       } else {
         _error = groupResult.message;
       }
-
       final billsResult = results[1] as BillResult<List<Bill>>;
-      if (billsResult.success) {
-        _bills = billsResult.data ?? [];
-      }
+      if (billsResult.success) _bills = billsResult.data ?? [];
     });
   }
 
@@ -76,10 +70,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             ScanBillScreen(groupId: widget.groupId, group: _group),
       ),
     );
-
-    if (result != null) {
-      _loadGroupData();
-    }
+    if (result != null) _loadGroupData();
   }
 
   void _navigateToBillDetail(Bill bill) async {
@@ -102,36 +93,30 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(friendsResult.message ?? 'Failed to load friends'),
-            backgroundColor: Colors.red,
+            content: Text(friendsResult.message ?? 'Gagal memuat teman'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
       return;
     }
-
-    // Filter out friends who are already members
     final memberIds = _group?.members?.map((m) => m.userId).toSet() ?? {};
     final availableFriends = friendsResult.data!
         .where((f) => !memberIds.contains(f.friend.id))
         .toList();
-
     if (!mounted) return;
-
     if (availableFriends.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('All your friends are already in this group'),
-        ),
+        const SnackBar(content: Text('Semua teman sudah ada di group ini')),
       );
       return;
     }
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.6,
@@ -140,7 +125,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         expand: false,
         builder: (context, scrollController) => Column(
           children: [
-            Container(
+            Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
@@ -148,14 +133,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: AppColors.surfaceBorder,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Add Friends to Group',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    'Tambah Anggota',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ],
               ),
@@ -168,20 +157,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                   final friend = availableFriends[index];
                   final user = friend.friend;
                   return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.deepPurple,
-                      backgroundImage: user.avatarUrl != null
-                          ? NetworkImage(user.avatarUrl!)
-                          : null,
-                      child: user.avatarUrl == null
-                          ? Text(
-                              user.username.substring(0, 1).toUpperCase(),
-                              style: const TextStyle(color: Colors.white),
-                            )
-                          : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 4,
                     ),
-                    title: Text(user.fullName ?? user.username),
-                    subtitle: Text('@${user.username}'),
+                    leading: _avatar(user.username, user.avatarUrl, 42),
+                    title: Text(
+                      user.fullName ?? user.username,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '@${user.username}',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
                     trailing: ElevatedButton(
                       onPressed: () async {
                         Navigator.pop(context);
@@ -194,20 +188,27 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                             SnackBar(
                               content: Text(
                                 result.success
-                                    ? 'Member added!'
-                                    : result.message ?? 'Failed',
+                                    ? 'Anggota ditambahkan!'
+                                    : result.message ?? 'Gagal',
                               ),
                               backgroundColor: result.success
-                                  ? Colors.green
-                                  : Colors.red,
+                                  ? AppColors.success
+                                  : AppColors.error,
                             ),
                           );
-                          if (result.success) {
-                            _loadGroupData();
-                          }
+                          if (result.success) _loadGroupData();
                         }
                       },
-                      child: const Text('Add'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: const Text(
+                        'Tambah',
+                        style: TextStyle(fontSize: 13),
+                      ),
                     ),
                   );
                 },
@@ -224,25 +225,36 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(_group?.name ?? 'Group'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        centerTitle: true,
         actions: [
           if (_userRole == 'admin')
             IconButton(
-              icon: const Icon(Icons.person_add),
+              icon: Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.person_add_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
               onPressed: _showAddMemberDialog,
-              tooltip: 'Add Member',
             ),
           PopupMenuButton(
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: AppColors.textSecondary,
+            ),
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'info',
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline),
-                    SizedBox(width: 8),
-                    Text('Group Info'),
+                    Icon(Icons.info_outline_rounded),
+                    SizedBox(width: 10),
+                    Text('Info Group'),
                   ],
                 ),
               ),
@@ -251,26 +263,39 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                   value: 'settings',
                   child: Row(
                     children: [
-                      Icon(Icons.settings),
-                      SizedBox(width: 8),
-                      Text('Settings'),
+                      Icon(Icons.settings_rounded),
+                      SizedBox(width: 10),
+                      Text('Pengaturan'),
                     ],
                   ),
                 ),
             ],
-            onSelected: (value) {
-              // TODO: Handle menu actions
-            },
+            onSelected: (value) {},
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(icon: Icon(Icons.receipt_long), text: 'Bills'),
-            Tab(icon: Icon(Icons.people), text: 'Members'),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.receipt_long_rounded, size: 18),
+                  SizedBox(width: 8),
+                  Text('Bills'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.people_rounded, size: 18),
+                  SizedBox(width: 8),
+                  Text('Anggota'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -281,13 +306,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 48,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(height: 16),
-                  Text(_error!),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.textMuted),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadGroupData,
-                    child: const Text('Retry'),
+                    child: const Text('Coba Lagi'),
                   ),
                 ],
               ),
@@ -298,11 +330,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             ),
       floatingActionButton: _tabController.index == 0
           ? FloatingActionButton.extended(
+              heroTag: 'group_detail_fab',
               onPressed: _navigateToScanBill,
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Scan Bill'),
+              icon: const Icon(Icons.camera_alt_rounded),
+              label: const Text(
+                'Scan Bill',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             )
           : null,
     );
@@ -314,38 +348,49 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No bills yet',
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                Icons.receipt_long_rounded,
+                size: 48,
+                color: AppColors.primary.withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Belum ada bill',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Tap the camera button to scan a bill',
-              style: TextStyle(color: Colors.grey[500]),
+            const Text(
+              'Tekan tombol kamera untuk scan bill.',
+              style: TextStyle(color: AppColors.textMuted),
             ),
           ],
         ),
       );
     }
-
     return RefreshIndicator(
       onRefresh: _loadGroupData,
+      color: AppColors.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
         itemCount: _bills.length,
         itemBuilder: (context, index) {
           final bill = _bills[index];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
+          return GlassCard(
+            padding: EdgeInsets.zero,
             child: InkWell(
               onTap: () => _navigateToBillDetail(bill),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -353,16 +398,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(bill.status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        color: _getStatusColor(bill.status).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
-                        Icons.receipt,
+                        Icons.receipt_rounded,
                         color: _getStatusColor(bill.status),
-                        size: 28,
+                        size: 24,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,8 +415,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                           Text(
                             bill.storeName ?? 'Bill',
                             style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -379,12 +425,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                             bill.createdAt != null
                                 ? _formatDate(bill.createdAt!)
                                 : '',
-                            style: TextStyle(
-                              color: Colors.grey[600],
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
                               fontSize: 12,
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           _buildStatusChip(bill.status),
                         ],
                       ),
@@ -395,13 +441,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                         Text(
                           'Rp ${_formatNumber(bill.totalAmount)}',
                           style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                            color: AppColors.primaryLight,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        const Icon(Icons.chevron_right, color: Colors.grey),
+                        const SizedBox(height: 6),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                        ),
                       ],
                     ),
                   ],
@@ -415,11 +464,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   }
 
   Widget _buildStatusChip(String status) {
-    Color color = _getStatusColor(status);
+    final color = _getStatusColor(status);
     String label;
     switch (status) {
       case 'completed':
-        label = 'Done';
+        label = 'Selesai';
         break;
       case 'splitting':
         label = 'Splitting';
@@ -427,19 +476,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
       default:
         label = 'Pending';
     }
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
         ),
       ),
     );
@@ -448,95 +496,120 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   Color _getStatusColor(String status) {
     switch (status) {
       case 'pending':
-        return Colors.orange;
+        return AppColors.warning;
       case 'splitting':
-        return Colors.blue;
+        return AppColors.info;
       case 'completed':
-        return Colors.green;
+        return AppColors.success;
       default:
-        return Colors.grey;
+        return AppColors.textMuted;
     }
   }
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-
-    if (diff.inDays == 0) {
-      return 'Today';
-    } else if (diff.inDays == 1) {
-      return 'Yesterday';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays} days ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
+    if (diff.inDays == 0) return 'Hari ini';
+    if (diff.inDays == 1) return 'Kemarin';
+    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   String _formatNumber(double number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(0)}K';
-    }
+    if (number >= 1000000) return '${(number / 1000000).toStringAsFixed(1)}M';
+    if (number >= 1000) return '${(number / 1000).toStringAsFixed(0)}K';
     return number.toStringAsFixed(0);
   }
 
   Widget _buildMembersTab() {
     final members = _group?.members ?? [];
-
     return RefreshIndicator(
       onRefresh: _loadGroupData,
+      color: AppColors.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
         itemCount: members.length,
         itemBuilder: (context, index) {
           final member = members[index];
           final user = member.profile;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.deepPurple,
-                backgroundImage: user?.avatarUrl != null
-                    ? NetworkImage(user!.avatarUrl!)
-                    : null,
-                child: user?.avatarUrl == null
-                    ? Text(
-                        user?.username.substring(0, 1).toUpperCase() ?? '?',
-                        style: const TextStyle(color: Colors.white),
-                      )
-                    : null,
-              ),
-              title: Text(
-                user?.fullName ?? user?.username ?? 'Unknown',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              subtitle: Text('@${user?.username ?? ''}'),
-              trailing: member.isAdmin
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'ADMIN',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.deepPurple,
+          return GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                _avatar(user?.username ?? '?', user?.avatarUrl, 42),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.fullName ?? user?.username ?? 'Unknown',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    )
-                  : null,
+                      const SizedBox(height: 2),
+                      Text(
+                        '@${user?.username ?? ''}',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (member.isAdmin)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'ADMIN',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _avatar(String name, String? url, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(size * 0.35),
+      ),
+      child: url != null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(size * 0.35),
+              child: Image.network(url, fit: BoxFit.cover),
+            )
+          : Center(
+              child: Text(
+                name.substring(0, 1).toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: size * 0.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
     );
   }
 }

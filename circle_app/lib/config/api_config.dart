@@ -38,6 +38,12 @@ class ApiConfig {
   static String approveBill(String groupId, String receiptId) =>
       '$baseUrl/api/groups/$groupId/receipts/$receiptId/approve';
 
+  // Scan Receipt (AI) endpoint
+  static const String scanReceipt = '$baseUrl/api/scan-receipt';
+
   // Spotify endpoints
   static const String spotifyCreateJam = '$baseUrl/api/spotify/create-jam';
+
+  // Socket.IO (for lyrics sync)
+  static const String socketUrl = baseUrl; // same host as backend
 }

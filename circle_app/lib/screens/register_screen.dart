@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -28,34 +29,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
-
     final result = await AuthService.register(
       email: _emailController.text.trim(),
       password: _passwordController.text,
       username: _usernameController.text.trim(),
       fullName: _fullNameController.text.trim(),
     );
-
     setState(() => _isLoading = false);
-
     if (result.success) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Registration successful! Please login.'),
-            backgroundColor: Colors.green,
+            content: Text('Registrasi berhasil! Silakan login.'),
+            backgroundColor: AppColors.success,
           ),
         );
-        Navigator.pop(context); // Go back to login
+        Navigator.pop(context);
       }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.message ?? 'Registration failed'),
-            backgroundColor: Colors.red,
+            content: Text(result.message ?? 'Registrasi gagal'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -65,150 +62,147 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
+      appBar: AppBar(title: const Text('Buat Akun')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                // Logo or Icon
-                const Icon(
-                  Icons.person_add,
-                  size: 80,
-                  color: Colors.deepPurple,
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.person_add_rounded,
+                    size: 40,
+                    color: AppColors.primaryLight,
+                  ),
                 ),
-                const SizedBox(height: 40),
-
-                // Username field
+                const SizedBox(height: 24),
+                const Text(
+                  'Bergabung dengan\nCircle ✨',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Buat akun untuk mulai mengelola tagihan bersama.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textMuted,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 36),
                 TextFormField(
                   controller: _usernameController,
-                  decoration: InputDecoration(
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
                     labelText: 'Username',
-                    prefixIcon: const Icon(Icons.alternate_email),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    prefixIcon: Icon(Icons.alternate_email),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    if (value.length < 3) {
-                      return 'Username must be at least 3 characters';
-                    }
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Masukkan username';
+                    if (v.length < 3) return 'Minimal 3 karakter';
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // Full Name field
                 TextFormField(
                   controller: _fullNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Full Name (optional)',
-                    prefixIcon: const Icon(Icons.person),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Lengkap (opsional)',
+                    prefixIcon: Icon(Icons.person_outline),
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Email field
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
                     labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(
-                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                    ).hasMatch(value)) {
-                      return 'Please enter a valid email';
-                    }
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Masukkan email';
+                    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v))
+                      return 'Email tidak valid';
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // Password field
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
+                  style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                       ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Masukkan password';
+                    if (v.length < 6) return 'Minimal 6 karakter';
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-
-                // Register button
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _register,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: GradientButton(
+                    onPressed: _isLoading ? null : _register,
+                    isLoading: _isLoading,
+                    child: const Text(
+                      'Buat Akun',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text(
-                          'Create Account',
-                          style: TextStyle(fontSize: 16),
-                        ),
                 ),
-                const SizedBox(height: 16),
-
-                // Login link
+                const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Already have an account? "),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Login'),
+                    const Text(
+                      'Sudah punya akun? ',
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Text(
+                        'Masuk',
+                        style: TextStyle(
+                          color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 40),
               ],
             ),
           ),

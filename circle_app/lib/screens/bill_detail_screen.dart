@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 import '../models/bill.dart';
 import '../models/group.dart';
 import '../services/bill_service.dart';
@@ -41,11 +42,8 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       _isLoading = true;
       _error = null;
     });
-
-    // Get current user
     final currentUser = await StorageService.getUser();
     _currentUserId = currentUser?.id;
-
     final results = await Future.wait([
       BillService.getBill(groupId: widget.groupId, billId: widget.billId),
       BillService.getBillBalances(
@@ -53,17 +51,14 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
         billId: widget.billId,
       ),
     ]);
-
     setState(() {
       _isLoading = false;
-
       final billResult = results[0] as BillResult<Bill>;
       if (billResult.success) {
         _bill = billResult.data;
       } else {
         _error = billResult.message;
       }
-
       final balancesResult = results[1] as BillResult<List<UserBalance>>;
       if (balancesResult.success) {
         _balances = balancesResult.data ?? [];
@@ -73,21 +68,18 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
 
   Future<void> _approvePayment(String userId) async {
     setState(() => _isApproving = true);
-
     final result = await BillService.approvePayment(
       groupId: widget.groupId,
       billId: widget.billId,
       userId: userId,
     );
-
     if (mounted) {
       setState(() => _isApproving = false);
-
       if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pembayaran di-approve! ✓'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
         _loadBill();
@@ -95,7 +87,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message ?? 'Gagal approve'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -104,21 +96,18 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
 
   Future<void> _rejectPayment(String userId) async {
     setState(() => _isApproving = true);
-
     final result = await BillService.rejectPayment(
       groupId: widget.groupId,
       billId: widget.billId,
       userId: userId,
     );
-
     if (mounted) {
       setState(() => _isApproving = false);
-
       if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Approval dibatalkan'),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.warning,
           ),
         );
         _loadBill();
@@ -128,276 +117,340 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
 
   Future<void> _splitEqually() async {
     if (widget.group == null || _bill == null) return;
-
     final memberIds =
         widget.group!.members?.map((m) => m.userId).toList() ?? [];
     if (memberIds.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No members to split with')));
+      ).showSnackBar(const SnackBar(content: Text('Tidak ada member')));
       return;
     }
-
     final result = await BillService.splitEqually(
       groupId: widget.groupId,
       billId: widget.billId,
       memberIds: memberIds,
     );
-
     if (result.success) {
       _loadBill();
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Bill split equally!'),
-            backgroundColor: Colors.green,
+            content: Text('Bill dibagi rata! ✓'),
+            backgroundColor: AppColors.success,
           ),
         );
-      }
     } else {
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.message ?? 'Failed to split'),
-            backgroundColor: Colors.red,
+            content: Text(result.message ?? 'Gagal split'),
+            backgroundColor: AppColors.error,
           ),
         );
-      }
     }
   }
 
   Future<void> _showSplitItemDialog(BillItem item) async {
     if (widget.group?.members == null) return;
-
     final members = widget.group!.members!;
     final selectedMembers = <String, double>{};
-
-    // Pre-fill with existing splits
-    for (var split in item.splits) {
-      selectedMembers[split.userId] = split.shareAmount;
+    for (var s in item.splits) {
+      selectedMembers[s.userId] = s.shareAmount;
     }
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: DraggableScrollableSheet(
-              initialChildSize: 0.6,
-              maxChildSize: 0.9,
-              minChildSize: 0.4,
-              expand: false,
-              builder: (context, scrollController) {
-                final splitAmount = selectedMembers.isEmpty
-                    ? 0.0
-                    : item.totalPrice / selectedMembers.length;
-
-                return Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            maxChildSize: 0.9,
+            minChildSize: 0.4,
+            expand: false,
+            builder: (context, scrollController) {
+              final splitAmount = selectedMembers.isEmpty
+                  ? 0.0
+                  : item.totalPrice / selectedMembers.length;
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceBorder,
+                            borderRadius: BorderRadius.circular(2),
                           ),
-                          const SizedBox(height: 16),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Split: ${item.name}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Rp ${_formatNumber(item.totalPrice)}',
+                          style: const TextStyle(color: AppColors.textMuted),
+                        ),
+                        if (selectedMembers.isNotEmpty) ...[
+                          const SizedBox(height: 8),
                           Text(
-                            'Split: ${item.name}',
+                            'Masing-masing: Rp ${_formatNumber(splitAmount)}',
                             style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          Text(
-                            'Rp ${_formatNumber(item.totalPrice)}',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                          if (selectedMembers.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Each pays: Rp ${_formatNumber(splitAmount)}',
-                              style: const TextStyle(
-                                color: Colors.deepPurple,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        itemCount: members.length,
-                        itemBuilder: (context, index) {
-                          final member = members[index];
-                          final isSelected = selectedMembers.containsKey(
-                            member.userId,
-                          );
-
-                          return CheckboxListTile(
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: members.length,
+                      itemBuilder: (context, index) {
+                        final member = members[index];
+                        final isSelected = selectedMembers.containsKey(
+                          member.userId,
+                        );
+                        return Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary.withOpacity(0.08)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: CheckboxListTile(
                             value: isSelected,
-                            onChanged: (value) {
+                            activeColor: AppColors.primary,
+                            checkColor: Colors.white,
+                            onChanged: (v) {
                               setModalState(() {
-                                if (value == true) {
+                                if (v == true)
                                   selectedMembers[member.userId] = 0;
-                                } else {
+                                else
                                   selectedMembers.remove(member.userId);
-                                }
                               });
                             },
-                            secondary: CircleAvatar(
-                              backgroundColor: Colors.deepPurple,
-                              child: Text(
-                                (member.profile?.username ?? 'U')
-                                    .substring(0, 1)
-                                    .toUpperCase(),
-                                style: const TextStyle(color: Colors.white),
-                              ),
+                            secondary: _avatar(
+                              member.profile?.username,
+                              member.profile?.avatarUrl,
                             ),
                             title: Text(
                               member.profile?.fullName ??
                                   member.profile?.username ??
                                   'Unknown',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             subtitle: member.profile?.username != null
-                                ? Text('@${member.profile!.username}')
+                                ? Text(
+                                    '@${member.profile!.username}',
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 12,
+                                    ),
+                                  )
                                 : null,
-                          );
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: selectedMembers.isEmpty
-                              ? null
-                              : () async {
-                                  Navigator.pop(context);
-
-                                  final splits = selectedMembers.keys
-                                      .map(
-                                        (userId) => {
-                                          'user_id': userId,
-                                          'share_amount': splitAmount,
-                                        },
-                                      )
-                                      .toList();
-
-                                  final result = await BillService.splitItem(
-                                    groupId: widget.groupId,
-                                    billId: widget.billId,
-                                    itemId: item.id,
-                                    splits: splits,
-                                  );
-
-                                  if (result.success) {
-                                    _loadBill();
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                          child: const Text('Split Item'),
-                        ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: GradientButton(
+                        onPressed: selectedMembers.isEmpty
+                            ? null
+                            : () async {
+                                Navigator.pop(context);
+                                final splits = selectedMembers.keys
+                                    .map(
+                                      (uid) => {
+                                        'user_id': uid,
+                                        'share_amount': splitAmount,
+                                      },
+                                    )
+                                    .toList();
+                                final result = await BillService.splitItem(
+                                  groupId: widget.groupId,
+                                  billId: widget.billId,
+                                  itemId: item.id,
+                                  splits: splits,
+                                );
+                                if (result.success) _loadBill();
+                              },
+                        label: 'Split Item',
+                        icon: Icons.call_split_rounded,
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-          );
-        },
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _avatar(String? name, String? url) {
+    final l = (name ?? 'U').substring(0, 1).toUpperCase();
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        shape: BoxShape.circle,
+        image: url != null
+            ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
+            : null,
+      ),
+      child: url == null
+          ? Center(
+              child: Text(
+                l,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+            )
+          : null,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_bill?.storeName ?? 'Bill Details'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        title: Text(
+          _bill?.storeName ?? 'Detail Bill',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         actions: [
           if (_bill != null && !_bill!.isCompleted)
             PopupMenuButton(
+              color: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               itemBuilder: (context) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'split_equal',
                   child: Row(
                     children: [
-                      Icon(Icons.call_split),
-                      SizedBox(width: 8),
-                      Text('Split Equally'),
+                      Icon(
+                        Icons.call_split_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Split Rata',
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'complete',
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle),
-                      SizedBox(width: 8),
-                      Text('Mark Complete'),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: AppColors.success,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Tandai Selesai',
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
                     ],
                   ),
                 ),
               ],
               onSelected: (value) async {
-                if (value == 'split_equal') {
+                if (value == 'split_equal')
                   _splitEqually();
-                } else if (value == 'complete') {
-                  final result = await BillService.completeBill(
+                else if (value == 'complete') {
+                  final r = await BillService.completeBill(
                     groupId: widget.groupId,
                     billId: widget.billId,
                   );
-                  if (result.success) {
-                    _loadBill();
-                  }
+                  if (r.success) _loadBill();
                 }
               },
             ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : _error != null
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: 56,
+                    color: AppColors.textMuted.withOpacity(0.4),
+                  ),
                   const SizedBox(height: 16),
-                  Text(_error!),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.textMuted),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _loadBill,
-                    child: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Coba Lagi'),
                   ),
                 ],
               ),
             )
           : _bill == null
-          ? const Center(child: Text('Bill not found'))
+          ? const Center(
+              child: Text(
+                'Bill tidak ditemukan',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            )
           : RefreshIndicator(
+              color: AppColors.primary,
               onRefresh: _loadBill,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -405,20 +458,14 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Bill header
                     _buildBillHeader(),
-                    const SizedBox(height: 24),
-
-                    // Items section
+                    const SizedBox(height: 20),
                     _buildItemsSection(),
-                    const SizedBox(height: 24),
-
-                    // Summary section
+                    const SizedBox(height: 20),
                     _buildSummarySection(),
-                    const SizedBox(height: 24),
-
-                    // Balances section
+                    const SizedBox(height: 20),
                     if (_balances.isNotEmpty) _buildBalancesSection(),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -427,7 +474,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
   }
 
   Widget _buildBillHeader() {
-    return Card(
+    return GlassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -435,16 +482,16 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.deepPurple.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
-                Icons.receipt_long,
-                color: Colors.deepPurple,
-                size: 32,
+                Icons.receipt_long_rounded,
+                color: Colors.white,
+                size: 28,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,13 +500,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                     _bill!.storeName ?? 'Unknown Store',
                     style: const TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _formatDate(_bill!.createdAt),
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -476,29 +527,28 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     String label;
     switch (status) {
       case 'completed':
-        color = Colors.green;
-        label = 'Completed';
+        color = AppColors.success;
+        label = 'Selesai';
         break;
       case 'splitting':
-        color = Colors.orange;
+        color = AppColors.warning;
         label = 'Splitting';
         break;
       default:
-        color = Colors.grey;
+        color = AppColors.textMuted;
         label = 'Pending';
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
       ),
@@ -511,17 +561,21 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       children: [
         const Text(
           'Items',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         if (_bill!.items.isEmpty)
-          Card(
+          GlassCard(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Center(
                 child: Text(
-                  'No items added yet',
-                  style: TextStyle(color: Colors.grey[600]),
+                  'Belum ada item',
+                  style: TextStyle(color: AppColors.textMuted.withOpacity(0.7)),
                 ),
               ),
             ),
@@ -533,87 +587,107 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
   }
 
   Widget _buildItemCard(BillItem item) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: _bill!.isCompleted ? null : () => _showSplitItemDialog(item),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GlassCard(
+        child: InkWell(
+          onTap: _bill!.isCompleted ? null : () => _showSplitItemDialog(item),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            '${item.quantity}x Rp ${_formatNumber(item.unitPrice)}',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'Rp ${_formatNumber(item.totalPrice)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                if (item.splits.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(height: 1, color: AppColors.surfaceBorder),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: item.splits.map((split) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: split.isPaid
+                              ? AppColors.success.withOpacity(0.12)
+                              : AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: split.isPaid
+                                ? AppColors.success.withOpacity(0.3)
+                                : AppColors.surfaceBorder,
                           ),
                         ),
-                        Text(
-                          '${item.quantity}x Rp ${_formatNumber(item.unitPrice)}',
-                          style: TextStyle(color: Colors.grey[600]),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _avatar(split.user?.username, null),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Rp ${_formatNumber(split.shareAmount)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: split.isPaid
+                                    ? AppColors.success
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    }).toList(),
                   ),
+                ] else if (!_bill!.isCompleted) ...[
+                  const SizedBox(height: 8),
                   Text(
-                    'Rp ${_formatNumber(item.totalPrice)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                    'Tap untuk split item ini',
+                    style: TextStyle(
+                      color: AppColors.primary.withOpacity(0.7),
+                      fontSize: 12,
                     ),
                   ),
                 ],
-              ),
-              if (item.splits.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: item.splits.map((split) {
-                    return Chip(
-                      avatar: CircleAvatar(
-                        backgroundColor: Colors.deepPurple,
-                        child: Text(
-                          (split.user?.username ?? 'U')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      label: Text(
-                        'Rp ${_formatNumber(split.shareAmount)}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      backgroundColor: split.isPaid
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.grey.withOpacity(0.1),
-                    );
-                  }).toList(),
-                ),
-              ] else if (!_bill!.isCompleted) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Tap to split this item',
-                  style: TextStyle(
-                    color: Colors.deepPurple.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -621,17 +695,20 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
   }
 
   Widget _buildSummarySection() {
-    return Card(
-      color: Colors.deepPurple.withOpacity(0.05),
+    return GlassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             _buildSummaryRow('Subtotal', _bill!.subtotal),
-            if (_bill!.taxAmount > 0) _buildSummaryRow('Tax', _bill!.taxAmount),
+            if (_bill!.taxAmount > 0)
+              _buildSummaryRow('Pajak', _bill!.taxAmount),
             if (_bill!.serviceCharge > 0)
               _buildSummaryRow('Service Charge', _bill!.serviceCharge),
-            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Container(height: 1, color: AppColors.surfaceBorder),
+            ),
             _buildSummaryRow('Total', _bill!.totalAmount, isBold: true),
           ],
         ),
@@ -648,16 +725,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
           Text(
             label,
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 18 : 14,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+              fontSize: isBold ? 17 : 14,
+              color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
             ),
           ),
           Text(
             'Rp ${_formatNumber(amount)}',
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 18 : 14,
-              color: isBold ? Colors.deepPurple : null,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w400,
+              fontSize: isBold ? 17 : 14,
+              color: isBold ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
         ],
@@ -674,28 +752,35 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
           children: [
             const Text(
               'Status Pembayaran',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
             if (_isCreator)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: AppColors.info.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
                   'Admin Bill',
                   style: TextStyle(
-                    color: Colors.blue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    color: AppColors.info,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 12),
-        ...(_balances.map((balance) => _buildBalanceCard(balance))),
+        const SizedBox(height: 10),
+        ...(_balances.map((b) => _buildBalanceCard(b))),
       ],
     );
   }
@@ -704,155 +789,167 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     final isCurrentUser = balance.userId == _currentUserId;
     final isCreatorBalance = balance.userId == _bill?.uploadedBy;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: isCurrentUser ? Colors.deepPurple.withOpacity(0.05) : null,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            // Avatar with status indicator
-            Stack(
-              children: [
-                CircleAvatar(
-                  backgroundColor: balance.isSettled
-                      ? Colors.green
-                      : Colors.deepPurple,
-                  backgroundImage: balance.user?.avatarUrl != null
-                      ? NetworkImage(balance.user!.avatarUrl!)
-                      : null,
-                  child: balance.user?.avatarUrl == null
-                      ? Text(
-                          (balance.user?.username ?? 'U')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style: const TextStyle(color: Colors.white),
-                        )
-                      : null,
-                ),
-                if (balance.isSettled)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 10,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GlassCard(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  _avatar(balance.user?.username, balance.user?.avatarUrl),
+                  if (balance.isSettled)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 10,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            // Name and status
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        balance.user?.fullName ??
-                            balance.user?.username ??
-                            'Unknown',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      if (isCurrentUser)
-                        const Text(
-                          ' (Kamu)',
-                          style: TextStyle(
-                            color: Colors.deepPurple,
-                            fontSize: 12,
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            balance.user?.fullName ??
+                                balance.user?.username ??
+                                'Unknown',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      if (isCreatorBalance)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Pembuat',
+                        if (isCurrentUser)
+                          const Text(
+                            ' (Kamu)',
                             style: TextStyle(
-                              color: Colors.amber,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        if (isCreatorBalance)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.warning.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Pembuat',
+                              style: TextStyle(
+                                color: AppColors.warning,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      balance.isSettled ? 'Sudah bayar ✓' : 'Belum bayar',
+                      style: TextStyle(
+                        color: balance.isSettled
+                            ? AppColors.success
+                            : AppColors.warning,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Rp ${_formatNumber(balance.amountOwed)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: balance.isSettled
+                          ? AppColors.success
+                          : AppColors.textPrimary,
+                      decoration: balance.isSettled
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  if (_isCreator && !isCreatorBalance) ...[
+                    const SizedBox(height: 6),
+                    if (balance.isSettled)
+                      SizedBox(
+                        height: 30,
+                        child: TextButton.icon(
+                          onPressed: _isApproving
+                              ? null
+                              : () => _rejectPayment(balance.userId),
+                          icon: const Icon(Icons.undo_rounded, size: 14),
+                          label: const Text(
+                            'Batalkan',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.warning,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                          ),
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: 30,
+                        child: ElevatedButton.icon(
+                          onPressed: _isApproving
+                              ? null
+                              : () => _showApproveDialog(balance),
+                          icon: const Icon(Icons.check_rounded, size: 14),
+                          label: const Text(
+                            'Acc',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            minimumSize: Size.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    balance.isSettled ? 'Sudah bayar ✓' : 'Belum bayar',
-                    style: TextStyle(
-                      color: balance.isSettled ? Colors.green : Colors.orange,
-                      fontSize: 12,
-                    ),
-                  ),
+                      ),
+                  ],
                 ],
               ),
-            ),
-            // Amount
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'Rp ${_formatNumber(balance.amountOwed)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: balance.isSettled ? Colors.green : Colors.black,
-                    decoration: balance.isSettled
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-                // Approve/reject button (only for bill creator, not for themselves)
-                if (_isCreator && !isCreatorBalance) ...[
-                  const SizedBox(height: 8),
-                  if (balance.isSettled)
-                    TextButton.icon(
-                      onPressed: _isApproving
-                          ? null
-                          : () => _rejectPayment(balance.userId),
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Batalkan'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.orange,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: const Size(0, 32),
-                      ),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: _isApproving
-                          ? null
-                          : () => _showApproveDialog(balance),
-                      icon: const Icon(Icons.check, size: 16),
-                      label: const Text('Acc'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        minimumSize: const Size(0, 32),
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -862,38 +959,51 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Pembayaran'),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Konfirmasi Pembayaran',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Apakah ${balance.user?.username ?? 'user'} sudah transfer ke rekening kamu?',
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.success.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.payments, color: Colors.green),
+                  const Icon(Icons.payments_rounded, color: AppColors.success),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Jumlah',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                        ),
                       ),
                       Text(
                         'Rp ${_formatNumber(balance.amountOwed)}',
                         style: const TextStyle(
                           fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.success,
                         ),
                       ),
                     ],
@@ -906,7 +1016,10 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -914,10 +1027,16 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
               _approvePayment(balance.userId);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Sudah Masuk'),
+            child: const Text(
+              'Sudah Masuk',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -929,7 +1048,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
         .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
+          (m) => '${m[1]}.',
         );
   }
 

@@ -1,24 +1,80 @@
 # Circle
 
-A social music sharing app built with Flutter and Next.js, integrating Spotify and Supabase.
+**Social bill-splitting & music sharing app** built with Flutter and Next.js, integrating Spotify, Supabase, and Google Gemini AI.
+
+---
+
+## Features
+
+### Bill Splitting
+- Create and manage group bills
+- **AI Receipt Scanner** — snap a receipt photo, Gemini AI extracts all items automatically
+- Assign items to members and split costs fairly
+- Track payment status per person (pending, approved, rejected)
+
+### Real-time Lyrics Sync
+- Create a **music room** and share your Spotify playback in real-time
+- Synced lyrics display via Musixmatch integration
+- Multiple listeners can join the same room with a 6-character code
+- Auto-scrolling lyrics with sync offset controls
+
+### Social
+- Add friends and manage friend requests
+- Create groups for splitting bills together
+- User profiles with avatar and activity history
+
+---
 
 ## Project Structure
 
 ```
 Circle/
-├── circle_app/     # Flutter mobile application
-├── backend/        # Next.js API backend
-└── README.md
+├── backend/                  # Next.js API + Socket.IO server
+│   ├── server.ts             # Custom HTTP server (Next.js + Socket.IO)
+│   ├── src/
+│   │   ├── app/api/          # REST API routes
+│   │   │   ├── auth/         # Authentication endpoints
+│   │   │   ├── bills/        # Bill CRUD endpoints
+│   │   │   ├── friends/      # Friend management
+│   │   │   ├── groups/       # Group management
+│   │   │   ├── lyrics/       # Lyrics room REST endpoint
+│   │   │   └── scan-receipt/ # Gemini AI receipt scanning
+│   │   ├── socket/
+│   │   │   ├── handler.ts         # Socket.IO event handlers
+│   │   │   ├── spotify-service.ts # Spotify API integration
+│   │   │   └── lyrics-service.ts  # Musixmatch lyrics fetcher
+│   │   └── lib/
+│   │       └── supabase.ts        # Supabase client
+│   └── .env.local            # Environment variables
+│
+├── circle_app/               # Flutter mobile/web application
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── config/
+│   │   │   ├── api_config.dart    # API base URL config
+│   │   │   └── theme.dart         # Design system (colors, theme, widgets)
+│   │   ├── models/                # Data models
+│   │   ├── screens/               # All UI screens (13 screens)
+│   │   └── services/              # API and Socket services
+│   └── pubspec.yaml
+│
+└── database/
+    ├── schema.sql             # Full database schema
+    └── schema_simple.sql      # Simplified schema
 ```
 
-## Prerequisites
+---
+
+## Getting Started
+
+### Prerequisites
 
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) (3.x or later)
 - [Node.js](https://nodejs.org/) (18.x or later)
-- [Spotify Developer Account](https://developer.spotify.com/dashboard)
 - [Supabase Account](https://supabase.com/)
-
-## Setup
+- [Spotify Developer Account](https://developer.spotify.com/dashboard) (for lyrics feature)
+- [Google AI Studio](https://aistudio.google.com/) (for receipt scanning)
+- [Musixmatch API Key](https://developer.musixmatch.com/) (for lyrics)
 
 ### 1. Clone the Repository
 
@@ -31,21 +87,25 @@ cd Circle
 
 ```bash
 cd backend
-
-# Install dependencies
 npm install
-
-# Create environment file
-cp .env.local.example .env.local
 ```
 
-Edit `.env.local` with your credentials:
+Create `.env.local` with your credentials:
 
 ```env
+# Supabase
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Spotify (for lyrics sync)
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+
+# Gemini AI (for receipt scanning)
+GEMINI_API_KEY=your_gemini_api_key
+
+# Musixmatch (for lyrics)
+MUSIXMATCH_API_KEY=your_musixmatch_api_key
 ```
 
 Start the development server:
@@ -54,122 +114,171 @@ Start the development server:
 npm run dev
 ```
 
-The backend will be available at `http://localhost:3000`.
+The server starts on `http://localhost:3000` with both REST API and Socket.IO enabled.
 
 ### 3. Flutter App Setup
 
 ```bash
 cd circle_app
-
-# Install dependencies
 flutter pub get
-
-# Run the app
-flutter run
+flutter run -d chrome    # Run on web
 ```
+
+Update `lib/config/api_config.dart` if the backend URL differs.
+
+---
 
 ## API Endpoints
 
-### Spotify
+### Authentication
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/spotify/create-jam` | Exchange Spotify auth code for access token |
+| POST | `/api/auth/register` | Register a new user |
+| POST | `/api/auth/login` | Login with email and password |
+| GET | `/api/auth/me` | Get current user profile |
 
-#### POST /api/spotify/create-jam
+### Groups
 
-Request body:
-```json
-{
-  "code": "spotify_authorization_code",
-  "redirect_uri": "your_app_redirect_uri",
-  "user_id": "optional_supabase_user_id"
-}
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/groups` | List user groups |
+| POST | `/api/groups` | Create a new group |
+| GET | `/api/groups/:id` | Get group details |
 
-Response:
-```json
-{
-  "access_token": "...",
-  "refresh_token": "...",
-  "expires_in": 3600,
-  "token_type": "Bearer",
-  "scope": "..."
-}
-```
+### Bills
 
-## Development
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/bills?group_id=xxx` | List bills in a group |
+| POST | `/api/bills` | Create a new bill |
+| GET | `/api/bills/:id` | Get bill details |
+| PATCH | `/api/bills/:id/splits` | Approve or reject a split |
 
-### Running the Backend
+### Friends
 
-```bash
-cd backend
-npm run dev      # Development mode
-npm run build    # Build for production
-npm start        # Start production server
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/friends` | List friends |
+| POST | `/api/friends/request` | Send friend request |
+| PATCH | `/api/friends/:id` | Accept or reject request |
 
-### Running the Flutter App
+### AI Receipt Scanner
 
-```bash
-cd circle_app
-flutter run              # Run on connected device
-flutter run -d chrome    # Run on web
-flutter run -d ios       # Run on iOS simulator
-flutter run -d android   # Run on Android emulator
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/scan-receipt` | Upload receipt image, AI extracts items |
 
-### Running Tests
+### Socket.IO Events
 
-```bash
-# Flutter tests
-cd circle_app
-flutter test
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `create_room` | Client to Server | Host creates a lyrics room |
+| `join_room` | Client to Server | Listener joins a room |
+| `leave_room` | Client to Server | Leave current room |
+| `room_created` | Server to Client | Room ID returned to host |
+| `room_joined` | Server to Client | Room state sent to new member |
+| `track_changed` | Server to Client | New track and lyrics broadcast |
+| `playback_update` | Server to Client | Progress sync every 2.5s |
+| `member_count` | Server to Client | Updated listener count |
+| `room_closed` | Server to Client | Host left, room destroyed |
+| `error_event` | Server to Client | Error message |
 
-# Backend tests (if configured)
-cd backend
-npm test
-```
+---
+
+## Design System
+
+The app uses a **unified dark theme** defined in `lib/config/theme.dart`:
+
+| Token | Color | Usage |
+|-------|-------|-------|
+| `primary` | `#7C3AED` | Buttons, accents, active states |
+| `accent` | `#06B6D4` | Secondary actions, cyan highlights |
+| `background` | `#0F0F1A` | Scaffold background |
+| `surface` | `#1A1A2E` | Cards, bottom sheets |
+| `surfaceLight` | `#252542` | Input fields, elevated surfaces |
+| `textPrimary` | `#F1F1F6` | Headings, primary text |
+| `textSecondary` | `#9CA3AF` | Subtitles, descriptions |
+| `textMuted` | `#6B7280` | Hints, disabled text |
+
+### Custom Widgets
+
+- **GradientButton** - Primary CTA with purple-to-cyan gradient and shadow
+- **GlassCard** - Glass-morphism card with border and dark surface
+
+---
+
+## Screens
+
+| Screen | File | Description |
+|--------|------|-------------|
+| Login | `login_screen.dart` | Email/password auth |
+| Register | `register_screen.dart` | Create new account |
+| Home | `home_screen.dart` | Navigation hub (4 tabs) |
+| Groups | `groups_screen.dart` | List of user groups |
+| Friends | `friends_screen.dart` | Friends and requests (TabBar) |
+| Profile | `profile_screen.dart` | User profile and settings |
+| Create Group | `create_group_screen.dart` | New group form |
+| Group Detail | `group_detail_screen.dart` | Bills, members, settings |
+| Scan Bill | `scan_bill_screen.dart` | AI receipt scanner and split |
+| Bill Detail | `bill_detail_screen.dart` | Bill items and payment status |
+| Create Bill | `create_bill_screen.dart` | Manual bill creation |
+| Join Room | `join_room_screen.dart` | Create/join lyrics room |
+| Lyrics | `lyrics_screen.dart` | Synced lyrics display |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Flutter (Dart 3.9), Material 3 |
+| Backend | Next.js 16, TypeScript |
+| Real-time | Socket.IO 4 |
+| Database | Supabase (PostgreSQL) |
+| AI | Google Gemini 2.0 Flash Lite |
+| Music | Spotify Web API, Musixmatch API |
+| Auth | Supabase Auth |
+
+### Flutter Dependencies
+
+- `http` - REST API calls
+- `flutter_secure_storage` - Secure token storage
+- `shared_preferences` - Local preferences
+- `image_picker` - Camera/gallery access
+- `http_parser` - Multipart file uploads
+- `socket_io_client` - Real-time Socket.IO
+- `url_launcher` - External URL handling
+- `google_mlkit_text_recognition` - On-device OCR (fallback)
+
+---
 
 ## Environment Variables
 
 ### Backend (.env.local)
 
-| Variable | Description |
-|----------|-------------|
-| `SUPABASE_URL` | Your Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID |
-| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
+| `SPOTIFY_CLIENT_ID` | For lyrics | Spotify app client ID |
+| `SPOTIFY_CLIENT_SECRET` | For lyrics | Spotify app client secret |
+| `GEMINI_API_KEY` | For scanning | Google Gemini API key |
+| `MUSIXMATCH_API_KEY` | For lyrics | Musixmatch API key |
 
-## Supabase Setup
+---
 
-Create the following table in your Supabase database for storing Spotify tokens:
+## Database
 
-```sql
-CREATE TABLE spotify_tokens (
-  user_id UUID PRIMARY KEY REFERENCES auth.users(id),
-  access_token TEXT NOT NULL,
-  refresh_token TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  scope TEXT,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+Import the schema into your Supabase project:
 
--- Enable RLS
-ALTER TABLE spotify_tokens ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users can only access their own tokens
-CREATE POLICY "Users can access own tokens" ON spotify_tokens
-  FOR ALL USING (auth.uid() = user_id);
+```bash
+psql -h your-supabase-host -U postgres -d postgres -f database/schema.sql
 ```
 
-## Spotify Setup
+See `database/schema.sql` for the complete table definitions.
 
-1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app
-3. Add your redirect URIs in the app settings
-4. Copy the Client ID and Client Secret to your `.env.local`
+---
 
 ## License
 

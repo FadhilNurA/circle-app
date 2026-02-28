@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 import '../models/group.dart';
 import '../services/group_service.dart';
 import 'group_detail_screen.dart';
@@ -27,9 +28,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       _isLoading = true;
       _error = null;
     });
-
     final result = await GroupService.getGroups();
-
     setState(() {
       _isLoading = false;
       if (result.success) {
@@ -45,9 +44,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       context,
       MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
     );
-    if (result == true) {
-      _loadGroups();
-    }
+    if (result == true) _loadGroups();
   }
 
   void _openGroup(Group group) {
@@ -62,14 +59,27 @@ class _GroupsScreenState extends State<GroupsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Groups'),
-        centerTitle: true,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                color: AppColors.primary,
+                size: 22,
+              ),
+            ),
+            onPressed: _createGroup,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _createGroup,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
@@ -77,120 +87,178 @@ class _GroupsScreenState extends State<GroupsScreen> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: Colors.grey[600])),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _loadGroups, child: const Text('Retry')),
-          ],
-        ),
+      return _buildEmptyState(
+        icon: Icons.error_outline_rounded,
+        title: 'Terjadi Kesalahan',
+        subtitle: _error!,
+        actionLabel: 'Coba Lagi',
+        onAction: _loadGroups,
       );
     }
-
     if (_groups.isEmpty) {
-      return Center(
+      return _buildEmptyState(
+        icon: Icons.group_outlined,
+        title: 'Belum ada group',
+        subtitle: 'Buat group untuk mulai split bill bareng teman.',
+        actionLabel: 'Buat Group',
+        onAction: _createGroup,
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadGroups,
+      color: AppColors.primary,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+        itemCount: _groups.length,
+        itemBuilder: (context, index) => _buildGroupCard(_groups[index]),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.group_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                icon,
+                size: 48,
+                color: AppColors.primary.withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
-              'No groups yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Create a group to start splitting bills',
-              style: TextStyle(color: Colors.grey[500]),
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textMuted, height: 1.5),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _createGroup,
-              icon: const Icon(Icons.add),
-              label: const Text('Create Group'),
-            ),
+            if (actionLabel != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: Text(actionLabel),
+              ),
+            ],
           ],
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadGroups,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _groups.length,
-        itemBuilder: (context, index) {
-          final group = _groups[index];
-          return _buildGroupCard(group);
-        },
       ),
     );
   }
 
   Widget _buildGroupCard(Group group) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          radius: 28,
-          backgroundColor: Colors.deepPurple,
-          backgroundImage: group.imageUrl != null
-              ? NetworkImage(group.imageUrl!)
-              : null,
-          child: group.imageUrl == null
-              ? Text(
-                  group.name.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : null,
-        ),
-        title: Text(
-          group.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (group.description != null && group.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  group.description!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey[600]),
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => _openGroup(group),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: group.imageUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          group.imageUrl!,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          group.name.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (group.description != null &&
+                        group.description!.isNotEmpty)
+                      Text(
+                        group.description!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.people_rounded,
+                          size: 14,
+                          color: AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${group.memberCount} anggota',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.people, size: 16, color: Colors.grey[500]),
-                const SizedBox(width: 4),
-                Text(
-                  '${group.memberCount} members',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                ),
-              ],
-            ),
-          ],
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textMuted,
+              ),
+            ],
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => _openGroup(group),
       ),
     );
   }

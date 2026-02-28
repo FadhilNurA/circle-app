@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import '../config/theme.dart';
 import '../models/group.dart';
 import '../services/bill_service.dart';
+import '../services/scan_receipt_service.dart';
 
 class ScanBillScreen extends StatefulWidget {
   final String groupId;
@@ -19,29 +18,18 @@ class ScanBillScreen extends StatefulWidget {
 
 class _ScanBillScreenState extends State<ScanBillScreen> {
   final ImagePicker _picker = ImagePicker();
-  TextRecognizer? _textRecognizer;
 
   Uint8List? _imageBytes;
-  File? _imageFile;
+  String? _imageFilename;
   bool _isProcessing = false;
   bool _isSaving = false;
   String? _error;
 
-  // Items with assigned members
-  List<BillItemData> _items = [];
+  List<ScannedItem> _items = [];
   String _storeName = '';
-
-  // Tax & service
   double _tax = 0;
   double _serviceCharge = 0;
-
-  @override
-  void dispose() {
-    if (!kIsWeb && _textRecognizer != null) {
-      _textRecognizer!.close();
-    }
-    super.dispose();
-  }
+  Map<int, Set<String>> _assignedMembers = {};
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -51,143 +39,64 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
         maxHeight: 1800,
         imageQuality: 90,
       );
-
       if (pickedFile != null) {
         final bytes = await pickedFile.readAsBytes();
         setState(() {
           _imageBytes = bytes;
-          if (!kIsWeb) {
-            _imageFile = File(pickedFile.path);
-          }
+          _imageFilename = pickedFile.name;
           _error = null;
+          _items = [];
+          _assignedMembers = {};
         });
-        await _processImage();
+        await _scanWithAI();
       }
     } catch (e) {
-      setState(() {
-        _error = 'Failed to pick image: $e';
-      });
+      setState(() => _error = 'Gagal mengambil gambar: $e');
     }
   }
 
-  Future<void> _processImage() async {
+  Future<void> _scanWithAI() async {
+    if (_imageBytes == null) return;
     setState(() {
       _isProcessing = true;
       _error = null;
     });
-
-    try {
-      if (kIsWeb) {
-        // OCR not available on web
-        setState(() {
-          _isProcessing = false;
-          _storeName = 'Receipt';
-        });
-        return;
-      }
-
-      _textRecognizer ??= TextRecognizer();
-      final inputImage = InputImage.fromFile(_imageFile!);
-      final recognizedText = await _textRecognizer!.processImage(inputImage);
-      _parseReceiptText(recognizedText.text);
-
+    final result = await ScanReceiptService.scanReceipt(
+      imageBytes: _imageBytes!,
+      filename: _imageFilename ?? 'receipt.jpg',
+    );
+    if (!mounted) return;
+    if (result.success && result.items != null && result.items!.isNotEmpty) {
       setState(() {
+        _items = result.items!;
+        _storeName = result.merchantName ?? 'Receipt';
+        _tax = result.tax ?? 0;
+        _serviceCharge = result.serviceCharge ?? 0;
         _isProcessing = false;
       });
-    } catch (e) {
+    } else {
       setState(() {
         _isProcessing = false;
-        _error = 'Failed to process: $e';
+        _error = result.error ?? 'Struk tidak terbaca, silakan coba lagi.';
       });
     }
-  }
-
-  void _parseReceiptText(String text) {
-    final lines = text.split('\n');
-    List<BillItemData> items = [];
-    String storeName = '';
-
-    final pricePattern = RegExp(r'(\d{1,3}(?:[.,]\d{3})*|\d+)\s*$');
-    final totalPattern = RegExp(
-      r'(total|subtotal|grand|jumlah)',
-      caseSensitive: false,
-    );
-    final taxPattern = RegExp(r'(tax|pajak|ppn|pb1)', caseSensitive: false);
-    final servicePattern = RegExp(
-      r'(service|servis|charge)',
-      caseSensitive: false,
-    );
-
-    for (int i = 0; i < lines.length; i++) {
-      String line = lines[i].trim();
-      if (line.isEmpty) continue;
-
-      // First non-empty line is store name
-      if (i < 3 && storeName.isEmpty && !pricePattern.hasMatch(line)) {
-        storeName = line;
-        continue;
-      }
-
-      // Skip total lines
-      if (totalPattern.hasMatch(line)) continue;
-
-      // Check for tax
-      if (taxPattern.hasMatch(line)) {
-        final match = pricePattern.firstMatch(line);
-        if (match != null) {
-          _tax = _parsePrice(match.group(1) ?? '0');
-        }
-        continue;
-      }
-
-      // Check for service charge
-      if (servicePattern.hasMatch(line)) {
-        final match = pricePattern.firstMatch(line);
-        if (match != null) {
-          _serviceCharge = _parsePrice(match.group(1) ?? '0');
-        }
-        continue;
-      }
-
-      // Try to extract item
-      final priceMatch = pricePattern.firstMatch(line);
-      if (priceMatch != null) {
-        double price = _parsePrice(priceMatch.group(1) ?? '0');
-        String itemName = line.substring(0, priceMatch.start).trim();
-
-        if (itemName.length > 1 && price > 100 && price < 10000000) {
-          items.add(
-            BillItemData(
-              name: itemName,
-              price: price,
-              assignedMemberIds: {}, // Empty - user will assign
-            ),
-          );
-        }
-      }
-    }
-
-    setState(() {
-      _storeName = storeName.isNotEmpty ? storeName : 'Receipt';
-      _items = items;
-    });
-  }
-
-  double _parsePrice(String priceStr) {
-    String cleaned = priceStr.replaceAll(RegExp(r'[.,]'), '');
-    return double.tryParse(cleaned) ?? 0;
   }
 
   void _addItem() {
     showDialog(
       context: context,
       builder: (context) => _AddItemDialog(
-        onAdd: (name, price) {
-          setState(() {
-            _items.add(
-              BillItemData(name: name, price: price, assignedMemberIds: {}),
-            );
-          });
+        onAdd: (name, qty, price) {
+          setState(
+            () => _items.add(
+              ScannedItem(
+                name: name,
+                qty: qty,
+                price: price,
+                total: price * qty,
+              ),
+            ),
+          );
         },
       ),
     );
@@ -199,15 +108,17 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
       context: context,
       builder: (context) => _AddItemDialog(
         initialName: item.name,
+        initialQty: item.qty,
         initialPrice: item.price,
-        onAdd: (name, price) {
-          setState(() {
-            _items[index] = BillItemData(
+        onAdd: (name, qty, price) {
+          setState(
+            () => _items[index] = ScannedItem(
               name: name,
+              qty: qty,
               price: price,
-              assignedMemberIds: item.assignedMemberIds,
-            );
-          });
+              total: price * qty,
+            ),
+          );
         },
       ),
     );
@@ -216,24 +127,30 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
   void _deleteItem(int index) {
     setState(() {
       _items.removeAt(index);
+      _assignedMembers.remove(index);
+      final n = <int, Set<String>>{};
+      _assignedMembers.forEach((k, v) {
+        n[k > index ? k - 1 : k] = v;
+      });
+      _assignedMembers = n;
     });
   }
 
   void _showAssignMembersDialog(int itemIndex) {
     final item = _items[itemIndex];
     final members = widget.group?.members ?? [];
-    Set<String> selectedIds = Set.from(item.assignedMemberIds);
-
+    Set<String> selectedIds = Set.from(_assignedMembers[itemIndex] ?? {});
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,115 +160,124 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey[300],
+                      color: AppColors.surfaceBorder,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text(
                   'Siapa yang pesan "${item.name}"?',
                   style: const TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 Text(
-                  'Rp ${_formatPrice(item.price)}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  'Rp ${_formatPrice(item.total)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                // Select all button
-                CheckboxListTile(
-                  title: const Text(
-                    'Pilih Semua',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  value: selectedIds.length == members.length,
-                  onChanged: (value) {
-                    setModalState(() {
-                      if (value == true) {
-                        selectedIds = members.map((m) => m.userId).toSet();
-                      } else {
-                        selectedIds.clear();
-                      }
-                    });
-                  },
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                const Divider(),
-                // Member list
-                ...members.map((member) {
-                  final isSelected = selectedIds.contains(member.userId);
-                  return CheckboxListTile(
-                    value: isSelected,
-                    onChanged: (value) {
+                  child: CheckboxListTile(
+                    title: const Text(
+                      'Pilih Semua',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    value:
+                        members.isNotEmpty &&
+                        selectedIds.length == members.length,
+                    activeColor: AppColors.primary,
+                    checkColor: Colors.white,
+                    onChanged: (v) {
                       setModalState(() {
-                        if (value == true) {
-                          selectedIds.add(member.userId);
+                        if (v == true) {
+                          selectedIds = members.map((m) => m.userId).toSet();
                         } else {
-                          selectedIds.remove(member.userId);
+                          selectedIds.clear();
                         }
                       });
                     },
                     controlAffinity: ListTileControlAffinity.leading,
-                    secondary: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.deepPurple,
-                      backgroundImage: member.profile?.avatarUrl != null
-                          ? NetworkImage(member.profile!.avatarUrl!)
-                          : null,
-                      child: member.profile?.avatarUrl == null
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...members.map((member) {
+                  final isSel = selectedIds.contains(member.userId);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    decoration: BoxDecoration(
+                      color: isSel
+                          ? AppColors.primary.withOpacity(0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CheckboxListTile(
+                      value: isSel,
+                      activeColor: AppColors.primary,
+                      checkColor: Colors.white,
+                      onChanged: (v) {
+                        setModalState(() {
+                          if (v == true)
+                            selectedIds.add(member.userId);
+                          else
+                            selectedIds.remove(member.userId);
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      secondary: _avatar(
+                        member.profile?.username,
+                        member.profile?.avatarUrl,
+                      ),
+                      title: Text(
+                        member.profile?.fullName ??
+                            member.profile?.username ??
+                            'Unknown',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle:
+                          selectedIds.contains(member.userId) &&
+                              selectedIds.isNotEmpty
                           ? Text(
-                              (member.profile?.username ?? 'U')
-                                  .substring(0, 1)
-                                  .toUpperCase(),
-                              style: const TextStyle(color: Colors.white),
+                              'Rp ${_formatPrice(item.total / selectedIds.length)}',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             )
                           : null,
                     ),
-                    title: Text(
-                      member.profile?.fullName ??
-                          member.profile?.username ??
-                          'Unknown',
-                    ),
-                    subtitle:
-                        selectedIds.contains(member.userId) &&
-                            selectedIds.isNotEmpty
-                        ? Text(
-                            'Rp ${_formatPrice(item.price / selectedIds.length)}',
-                            style: const TextStyle(
-                              color: Colors.deepPurple,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          )
-                        : null,
                   );
                 }),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  height: 50,
+                  child: GradientButton(
                     onPressed: () {
-                      setState(() {
-                        _items[itemIndex] = BillItemData(
-                          name: item.name,
-                          price: item.price,
-                          assignedMemberIds: selectedIds,
-                        );
-                      });
+                      setState(() => _assignedMembers[itemIndex] = selectedIds);
                       Navigator.pop(context);
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: Text(
-                      selectedIds.isEmpty
-                          ? 'Skip Item'
-                          : 'Assign ${selectedIds.length} orang',
-                    ),
+                    label: selectedIds.isEmpty
+                        ? 'Skip Item'
+                        : 'Assign ${selectedIds.length} orang',
+                    icon: selectedIds.isEmpty
+                        ? Icons.skip_next_rounded
+                        : Icons.check_rounded,
                   ),
                 ),
               ],
@@ -362,69 +288,58 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
     );
   }
 
-  double get _subtotal => _items.fold(0.0, (sum, item) => sum + item.price);
+  double get _subtotal => _items.fold(0.0, (sum, item) => sum + item.total);
   double get _grandTotal => _subtotal + _tax + _serviceCharge;
+  int get _assignedItemCount => _items
+      .asMap()
+      .entries
+      .where((e) => (_assignedMembers[e.key] ?? {}).isNotEmpty)
+      .length;
 
-  // Calculate how much each person owes
   Map<String, double> get _memberTotals {
     Map<String, double> totals = {};
-    final members = widget.group?.members ?? [];
-
-    // Initialize all members with 0
-    for (var member in members) {
-      totals[member.userId] = 0;
+    for (var m in (widget.group?.members ?? [])) {
+      totals[m.userId] = 0;
     }
-
-    // Calculate item splits
-    for (var item in _items) {
-      if (item.assignedMemberIds.isNotEmpty) {
-        double perPerson = item.price / item.assignedMemberIds.length;
-        for (var memberId in item.assignedMemberIds) {
-          totals[memberId] = (totals[memberId] ?? 0) + perPerson;
+    for (int i = 0; i < _items.length; i++) {
+      final assigned = _assignedMembers[i] ?? {};
+      if (assigned.isNotEmpty) {
+        double pp = _items[i].total / assigned.length;
+        for (var id in assigned) {
+          totals[id] = (totals[id] ?? 0) + pp;
         }
       }
     }
-
-    // Add tax & service proportionally
-    double totalAssigned = totals.values.fold(0.0, (a, b) => a + b);
-    if (totalAssigned > 0 && (_tax > 0 || _serviceCharge > 0)) {
+    double ta = totals.values.fold(0.0, (a, b) => a + b);
+    if (ta > 0 && (_tax > 0 || _serviceCharge > 0)) {
       double extra = _tax + _serviceCharge;
-      for (var memberId in totals.keys) {
-        double proportion = totals[memberId]! / totalAssigned;
-        totals[memberId] = totals[memberId]! + (extra * proportion);
+      for (var id in totals.keys) {
+        totals[id] = totals[id]! + (extra * totals[id]! / ta);
       }
     }
-
     return totals;
   }
-
-  int get _assignedItemCount =>
-      _items.where((i) => i.assignedMemberIds.isNotEmpty).length;
 
   Future<void> _saveBill() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Tambah minimal 1 item'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-
     if (_assignedItemCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Assign minimal 1 item ke member'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-
     setState(() => _isSaving = true);
-
-    // Create bill
     final result = await BillService.createBill(
       groupId: widget.groupId,
       storeName: _storeName,
@@ -432,25 +347,25 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
       taxAmount: _tax,
       serviceCharge: _serviceCharge,
       items: _items
+          .asMap()
+          .entries
           .map(
-            (item) => {
-              'name': item.name,
-              'price': item.price,
-              'quantity': 1,
-              'assigned_to': item.assignedMemberIds.toList(),
+            (e) => {
+              'name': e.value.name,
+              'price': e.value.total,
+              'quantity': e.value.qty,
+              'assigned_to': (_assignedMembers[e.key] ?? {}).toList(),
             },
           )
           .toList(),
     );
-
     if (!mounted) return;
     setState(() => _isSaving = false);
-
     if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Bill berhasil disimpan!'),
-          backgroundColor: Colors.green,
+          content: Text('Bill berhasil disimpan! ✓'),
+          backgroundColor: AppColors.success,
         ),
       );
       Navigator.pop(context, result.data);
@@ -458,39 +373,72 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.message ?? 'Gagal menyimpan'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
         ),
       );
     }
   }
 
+  Widget _avatar(String? name, String? url) {
+    final l = (name ?? 'U').substring(0, 1).toUpperCase();
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        shape: BoxShape.circle,
+        image: url != null
+            ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
+            : null,
+      ),
+      child: url == null
+          ? Center(
+              child: Text(
+                l,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Split Bill'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Scan & Split Bill',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         actions: [
           if (_imageBytes != null && _items.isNotEmpty)
-            TextButton(
-              onPressed: _isSaving ? null : _saveBill,
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton(
+                onPressed: _isSaving ? null : _saveBill,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : const Text(
+                        'Simpan',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      'Simpan',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+              ),
             ),
         ],
       ),
@@ -500,80 +448,197 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
 
   Widget _buildImagePicker() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 24),
-          const Text(
-            'Scan Struk',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Foto struk atau pilih dari galeri',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => _pickImage(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Kamera'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 32,
+                    spreadRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.document_scanner_rounded,
+                size: 64,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Scan Struk dengan AI',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Foto struk belanja dan AI akan mengekstrak\nsemua item secara otomatis',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 40),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: GradientButton(
+                      onPressed: () => _pickImage(ImageSource.camera),
+                      label: 'Kamera',
+                      icon: Icons.camera_alt_rounded,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              OutlinedButton.icon(
-                onPressed: () => _pickImage(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library),
-                label: const Text('Galeri'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickImage(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_rounded, size: 20),
+                      label: const Text(
+                        'Galeri',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBillEditor() {
     if (_isProcessing) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Memproses struk...'),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'AI sedang membaca struk...',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Mengekstrak nama item, harga, dan jumlah',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
           ],
         ),
       );
     }
-
+    if (_error != null && _items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.error_outline_rounded,
+                  size: 56,
+                  color: AppColors.error,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, color: AppColors.error),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 44,
+                    child: GradientButton(
+                      onPressed: _scanWithAI,
+                      label: 'Coba Lagi',
+                      icon: Icons.refresh_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickImage(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_rounded, size: 18),
+                      label: const Text('Ganti Foto'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Column(
       children: [
-        // Image preview
         _buildImagePreview(),
-
-        // Items list
         Expanded(child: _buildItemsList()),
-
-        // Summary
         _buildSummary(),
       ],
     );
@@ -584,15 +649,13 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
       height: 120,
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.surfaceBorder),
       ),
       child: Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Image.memory(
               _imageBytes!,
               width: double.infinity,
@@ -600,38 +663,62 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
               fit: BoxFit.cover,
             ),
           ),
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.5)],
+                ),
+              ),
+            ),
+          ),
           Positioned(
             top: 8,
             right: 8,
             child: Row(
               children: [
-                _imageActionButton(
-                  Icons.camera_alt,
+                _imgBtn(
+                  Icons.camera_alt_rounded,
                   () => _pickImage(ImageSource.camera),
                 ),
                 const SizedBox(width: 8),
-                _imageActionButton(
-                  Icons.photo_library,
+                _imgBtn(
+                  Icons.photo_library_rounded,
                   () => _pickImage(ImageSource.gallery),
                 ),
               ],
             ),
           ),
           Positioned(
-            bottom: 8,
-            left: 8,
+            bottom: 10,
+            left: 12,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.black54,
+                color: AppColors.primary.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                _storeName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _storeName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -640,16 +727,16 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
     );
   }
 
-  Widget _imageActionButton(IconData icon, VoidCallback onPressed) {
+  Widget _imgBtn(IconData icon, VoidCallback onPressed) {
     return Material(
-      color: Colors.black54,
-      borderRadius: BorderRadius.circular(20),
+      color: AppColors.surface.withOpacity(0.8),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: Icon(icon, color: Colors.white, size: 18),
+          child: Icon(icon, color: AppColors.textPrimary, size: 18),
         ),
       ),
     );
@@ -659,143 +746,227 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Items',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      const Text(
+                        'Items',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'AI Scan',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     _items.isEmpty
                         ? 'Tambahkan item dari struk'
-                        : '${_assignedItemCount}/${_items.length} item sudah di-assign',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        : '$_assignedItemCount/${_items.length} item sudah di-assign',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: _addItem,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Tambah'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
+              SizedBox(
+                height: 36,
+                child: ElevatedButton.icon(
+                  onPressed: _addItem,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text(
+                    'Tambah',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const Divider(),
-
-        // Items
+        Container(height: 1, color: AppColors.surfaceBorder),
         Expanded(
           child: _items.isEmpty
-              ? _buildEmptyState()
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.receipt_long_rounded,
+                        size: 56,
+                        color: AppColors.textMuted.withOpacity(0.3),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Belum ada item',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
                   itemCount: _items.length,
-                  itemBuilder: (context, index) => _buildItemTile(index),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemBuilder: (_, i) => _buildItemTile(i),
                 ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long, size: 64, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            'Belum ada item',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tap "Tambah" untuk menambahkan item',
-            style: TextStyle(color: Colors.grey[500]),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildItemTile(int index) {
     final item = _items[index];
-    final isAssigned = item.assignedMemberIds.isNotEmpty;
+    final assigned = _assignedMembers[index] ?? {};
+    final isAsgn = assigned.isNotEmpty;
     final members = widget.group?.members ?? [];
-
-    // Get assigned member names
-    List<String> assignedNames = [];
-    for (var memberId in item.assignedMemberIds) {
-      final member = members.firstWhere(
-        (m) => m.userId == memberId,
+    List<String> names = [];
+    for (var id in assigned) {
+      final m = members.firstWhere(
+        (m) => m.userId == id,
         orElse: () => members.first,
       );
-      assignedNames.add(member.profile?.username ?? 'Unknown');
+      names.add(m.profile?.username ?? '?');
     }
-
     return Dismissible(
       key: Key('item_$index'),
       background: Container(
-        color: Colors.red,
+        color: AppColors.error,
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        child: const Icon(Icons.delete, color: Colors.white),
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_rounded, color: Colors.white),
       ),
       direction: DismissDirection.endToStart,
       onDismissed: (_) => _deleteItem(index),
-      child: ListTile(
-        onTap: () => _showAssignMembersDialog(index),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: isAssigned
-                ? Colors.green.withOpacity(0.1)
-                : Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            isAssigned ? Icons.check_circle : Icons.person_add,
-            color: isAssigned ? Colors.green : Colors.orange,
-          ),
-        ),
-        title: Text(
-          item.name,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: isAssigned
-            ? Text(
-                assignedNames.join(', '),
-                style: const TextStyle(color: Colors.deepPurple),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : const Text(
-                'Tap untuk assign',
-                style: TextStyle(color: Colors.orange),
-              ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Rp ${_formatPrice(item.price)}',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showAssignMembersDialog(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isAsgn
+                        ? AppColors.success.withOpacity(0.15)
+                        : AppColors.warning.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isAsgn
+                        ? Icons.check_circle_rounded
+                        : Icons.person_add_rounded,
+                    color: isAsgn ? AppColors.success : AppColors.warning,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                        ),
+                      ),
+                      if (item.qty > 1)
+                        Text(
+                          '${item.qty}x Rp ${_formatPrice(item.price)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      if (isAsgn)
+                        Text(
+                          names.join(', '),
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        const Text(
+                          'Tap untuk assign',
+                          style: TextStyle(
+                            color: AppColors.warning,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(
+                  'Rp ${_formatPrice(item.total)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit_rounded,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
+                  onPressed: () => _editItem(index),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.edit, size: 18),
-              onPressed: () => _editItem(index),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -804,78 +975,113 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
   Widget _buildSummary() {
     final members = widget.group?.members ?? [];
     final totals = _memberTotals;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.surfaceBorder)),
       ),
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Per person breakdown
             if (_assignedItemCount > 0) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Ringkasan per orang:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    ...members.where((m) => (totals[m.userId] ?? 0) > 0).map((
-                      member,
-                    ) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(member.profile?.username ?? 'Unknown'),
-                            Text(
-                              'Rp ${_formatPrice(totals[member.userId] ?? 0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.deepPurple,
+              GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Ringkasan per orang:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...members
+                          .where((m) => (totals[m.userId] ?? 0) > 0)
+                          .map(
+                            (m) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    m.profile?.username ?? '?',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Rp ${_formatPrice(totals[m.userId] ?? 0)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
+                          ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
             ],
-
-            // Total
+            if (_tax > 0 || _serviceCharge > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    if (_tax > 0)
+                      Text(
+                        'Tax: Rp ${_formatPrice(_tax)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    if (_tax > 0 && _serviceCharge > 0)
+                      const Text(
+                        ' • ',
+                        style: TextStyle(color: AppColors.textMuted),
+                      ),
+                    if (_serviceCharge > 0)
+                      Text(
+                        'Service: Rp ${_formatPrice(_serviceCharge)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Total', style: TextStyle(color: Colors.grey)),
+                    const Text(
+                      'Total',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
                     Text(
                       'Rp ${_formatPrice(_grandTotal)}',
                       style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
@@ -883,16 +1089,19 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
                 if (_items.isNotEmpty && _assignedItemCount < _items.length)
                   TextButton(
                     onPressed: () {
-                      // Find first unassigned item
-                      int index = _items.indexWhere(
-                        (i) => i.assignedMemberIds.isEmpty,
-                      );
-                      if (index >= 0) {
-                        _showAssignMembersDialog(index);
-                      }
+                      int idx = _items
+                          .asMap()
+                          .entries
+                          .firstWhere(
+                            (e) => (_assignedMembers[e.key] ?? {}).isEmpty,
+                            orElse: () => _items.asMap().entries.first,
+                          )
+                          .key;
+                      _showAssignMembersDialog(idx);
                     },
                     child: Text(
                       '${_items.length - _assignedItemCount} belum di-assign',
+                      style: const TextStyle(color: AppColors.warning),
                     ),
                   ),
               ],
@@ -908,85 +1117,107 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
         .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
+          (m) => '${m[1]}.',
         );
   }
 }
 
-// Data class
-class BillItemData {
-  final String name;
-  final double price;
-  final Set<String> assignedMemberIds;
-
-  BillItemData({
-    required this.name,
-    required this.price,
-    required this.assignedMemberIds,
-  });
-}
-
-// Add Item Dialog
 class _AddItemDialog extends StatefulWidget {
   final String? initialName;
+  final int? initialQty;
   final double? initialPrice;
-  final Function(String name, double price) onAdd;
-
+  final Function(String, int, double) onAdd;
   const _AddItemDialog({
     this.initialName,
+    this.initialQty,
     this.initialPrice,
     required this.onAdd,
   });
-
   @override
   State<_AddItemDialog> createState() => _AddItemDialogState();
 }
 
 class _AddItemDialogState extends State<_AddItemDialog> {
-  late TextEditingController _nameController;
-  late TextEditingController _priceController;
-
+  late TextEditingController _nameC, _qtyC, _priceC;
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialName);
-    _priceController = TextEditingController(
+    _nameC = TextEditingController(text: widget.initialName);
+    _qtyC = TextEditingController(text: (widget.initialQty ?? 1).toString());
+    _priceC = TextEditingController(
       text: widget.initialPrice?.toStringAsFixed(0) ?? '',
     );
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
+    _nameC.dispose();
+    _qtyC.dispose();
+    _priceC.dispose();
     super.dispose();
   }
+
+  InputDecoration _dec(String label, {String? hint, String? prefix}) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixText: prefix,
+        labelStyle: const TextStyle(color: AppColors.textMuted),
+        hintStyle: TextStyle(color: AppColors.textMuted.withOpacity(0.5)),
+        filled: true,
+        fillColor: AppColors.surfaceLight,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initialName != null ? 'Edit Item' : 'Tambah Item'),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        widget.initialName != null ? 'Edit Item' : 'Tambah Item',
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Nama Item',
-              hintText: 'cth: Nasi Goreng',
-              border: OutlineInputBorder(),
-            ),
+            controller: _nameC,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: _dec('Nama Item', hint: 'cth: Nasi Goreng'),
             textCapitalization: TextCapitalization.words,
             autofocus: true,
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _priceController,
-            decoration: const InputDecoration(
-              labelText: 'Harga',
-              prefixText: 'Rp ',
-              border: OutlineInputBorder(),
-            ),
+            controller: _qtyC,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: _dec('Jumlah'),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _priceC,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: _dec('Harga Satuan', prefix: 'Rp '),
             keyboardType: TextInputType.number,
           ),
         ],
@@ -994,32 +1225,43 @@ class _AddItemDialogState extends State<_AddItemDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Batal'),
+          child: const Text(
+            'Batal',
+            style: TextStyle(color: AppColors.textMuted),
+          ),
         ),
         ElevatedButton(
           onPressed: () {
-            final name = _nameController.text.trim();
-            final price = double.tryParse(_priceController.text) ?? 0;
-
+            final name = _nameC.text.trim();
+            final qty = int.tryParse(_qtyC.text) ?? 1;
+            final price = double.tryParse(_priceC.text) ?? 0;
             if (name.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Masukkan nama item')),
+                const SnackBar(
+                  content: Text('Masukkan nama item'),
+                  backgroundColor: AppColors.warning,
+                ),
               );
               return;
             }
             if (price <= 0) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Masukkan harga yang valid')),
+                const SnackBar(
+                  content: Text('Masukkan harga yang valid'),
+                  backgroundColor: AppColors.warning,
+                ),
               );
               return;
             }
-
-            widget.onAdd(name, price);
+            widget.onAdd(name, qty, price);
             Navigator.pop(context);
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepPurple,
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           child: Text(widget.initialName != null ? 'Update' : 'Tambah'),
         ),

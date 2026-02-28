@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
@@ -42,21 +43,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        content: const Text('Yakin ingin keluar dari akun?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Batal'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Logout'),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
       await AuthService.logout();
       if (mounted) {
@@ -74,134 +74,163 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        centerTitle: true,
         automaticallyImplyLeading: false,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadUser,
+              color: AppColors.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
-                    // Avatar
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: Colors.deepPurple,
-                      backgroundImage: _user?.avatarUrl != null
-                          ? NetworkImage(_user!.avatarUrl!)
-                          : null,
-                      child: _user?.avatarUrl == null
-                          ? Text(
-                              _user?.username.substring(0, 1).toUpperCase() ??
-                                  '?',
-                              style: const TextStyle(
-                                fontSize: 48,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                    const SizedBox(height: 24),
+
+                    // ─── Avatar ───
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.heroGradient,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: _user?.avatarUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(32),
+                              child: Image.network(
+                                _user!.avatarUrl!,
+                                fit: BoxFit.cover,
                               ),
                             )
-                          : null,
+                          : Center(
+                              child: Text(
+                                _user?.username.substring(0, 1).toUpperCase() ??
+                                    '?',
+                                style: const TextStyle(
+                                  fontSize: 40,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
                     ),
                     const SizedBox(height: 20),
 
-                    // Name
+                    // ─── Name ───
                     Text(
                       _user?.fullName ?? _user?.username ?? 'User',
                       style: const TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-
-                    // Username
+                    const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
+                        horizontal: 14,
+                        vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.deepPurple.withOpacity(0.1),
+                        color: AppColors.primary.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         '@${_user?.username ?? ''}',
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Colors.deepPurple,
-                          fontWeight: FontWeight.w500,
+                          color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     const SizedBox(height: 32),
 
-                    // Info Cards
-                    _buildInfoCard(
-                      icon: Icons.email_outlined,
-                      title: 'Email',
-                      value: _user?.email ?? '-',
+                    // ─── Info Cards ───
+                    _buildInfoTile(
+                      Icons.email_outlined,
+                      'Email',
+                      _user?.email ?? '-',
                     ),
-                    _buildInfoCard(
-                      icon: Icons.calendar_today,
-                      title: 'Joined',
-                      value: _user?.createdAt != null
+                    _buildInfoTile(
+                      Icons.calendar_today_rounded,
+                      'Bergabung',
+                      _user?.createdAt != null
                           ? _formatDate(_user!.createdAt!)
                           : '-',
                     ),
 
-                    const SizedBox(height: 32),
-
-                    // Menu Items
-                    _buildMenuItem(
-                      icon: Icons.settings,
-                      title: 'Settings',
-                      onTap: () {
-                        // TODO: Navigate to settings
-                      },
-                    ),
-                    _buildMenuItem(
-                      icon: Icons.help_outline,
-                      title: 'Help & Support',
-                      onTap: () {
-                        // TODO: Navigate to help
-                      },
-                    ),
-                    _buildMenuItem(
-                      icon: Icons.info_outline,
-                      title: 'About',
-                      onTap: () {
-                        showAboutDialog(
-                          context: context,
-                          applicationName: 'Circle',
-                          applicationVersion: '1.0.0',
-                          applicationLegalese: '© 2025 Circle App',
-                        );
-                      },
-                    ),
-
                     const SizedBox(height: 24),
 
-                    // Logout Button
+                    // ─── Menu ───
+                    GlassCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        children: [
+                          _buildMenuTile(
+                            Icons.settings_rounded,
+                            'Pengaturan',
+                            () {},
+                          ),
+                          const Divider(height: 1, indent: 56),
+                          _buildMenuTile(
+                            Icons.help_outline_rounded,
+                            'Bantuan',
+                            () {},
+                          ),
+                          const Divider(height: 1, indent: 56),
+                          _buildMenuTile(
+                            Icons.info_outline_rounded,
+                            'Tentang',
+                            () {
+                              showAboutDialog(
+                                context: context,
+                                applicationName: 'Circle',
+                                applicationVersion: '1.0.0',
+                                applicationLegalese: '© 2025 Circle App',
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Logout ───
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _logout,
-                        icon: const Icon(Icons.logout, color: Colors.red),
+                        icon: const Icon(
+                          Icons.logout_rounded,
+                          color: AppColors.error,
+                        ),
                         label: const Text(
                           'Logout',
-                          style: TextStyle(color: Colors.red),
+                          style: TextStyle(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(
+                            color: AppColors.error.withOpacity(0.5),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -209,36 +238,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoCard({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+  Widget _buildInfoTile(IconData icon, String title, String value) {
+    return GlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.deepPurple),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primaryLight, size: 20),
+          ),
           const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -248,17 +278,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMenuItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildMenuTile(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: Colors.grey[700]),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right),
+      leading: Icon(icon, color: AppColors.textSecondary),
+      title: Text(
+        title,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right_rounded,
+        color: AppColors.textMuted,
+      ),
       onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
     );
   }
 
@@ -268,15 +303,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'Feb',
       'Mar',
       'Apr',
-      'May',
+      'Mei',
       'Jun',
       'Jul',
-      'Aug',
+      'Agu',
       'Sep',
-      'Oct',
+      'Okt',
       'Nov',
-      'Dec',
+      'Des',
     ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 }

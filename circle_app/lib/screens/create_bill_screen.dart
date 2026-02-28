@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../config/theme.dart';
 import '../models/bill.dart';
 import '../models/group.dart';
 import '../services/bill_service.dart';
@@ -26,7 +27,7 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
   @override
   void initState() {
     super.initState();
-    _addItem(); // Start with one item
+    _addItem();
   }
 
   @override
@@ -41,9 +42,7 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
   }
 
   void _addItem() {
-    setState(() {
-      _items.add(BillItemInput());
-    });
+    setState(() => _items.add(BillItemInput()));
   }
 
   void _removeItem(int index) {
@@ -55,41 +54,27 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
     }
   }
 
-  double get _subtotal {
-    return _items.fold(0.0, (sum, item) => sum + item.total);
-  }
-
-  double get _tax {
-    return double.tryParse(_taxController.text) ?? 0;
-  }
-
-  double get _serviceCharge {
-    return double.tryParse(_serviceChargeController.text) ?? 0;
-  }
-
-  double get _grandTotal {
-    return _subtotal + _tax + _serviceCharge;
-  }
+  double get _subtotal => _items.fold(0.0, (sum, item) => sum + item.total);
+  double get _tax => double.tryParse(_taxController.text) ?? 0;
+  double get _serviceCharge =>
+      double.tryParse(_serviceChargeController.text) ?? 0;
+  double get _grandTotal => _subtotal + _tax + _serviceCharge;
 
   Future<void> _createBill() async {
     if (!_formKey.currentState!.validate()) return;
-
-    // Validate items
     bool hasValidItem = _items.any(
       (item) => item.name.isNotEmpty && item.total > 0,
     );
     if (!hasValidItem) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please add at least one item'),
-          backgroundColor: Colors.red,
+          content: Text('Tambah minimal 1 item'),
+          backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-
     setState(() => _isLoading = true);
-
     final items = _items
         .where((item) => item.name.isNotEmpty && item.total > 0)
         .map(
@@ -101,7 +86,6 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
           },
         )
         .toList();
-
     final result = await BillService.createBill(
       groupId: widget.groupId,
       storeName: _storeNameController.text.trim(),
@@ -110,30 +94,65 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
       serviceCharge: _serviceCharge,
       items: items,
     );
-
     setState(() => _isLoading = false);
-
     if (mounted) {
       if (result.success) {
         Navigator.pop(context, result.data);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.message ?? 'Failed to create bill'),
-            backgroundColor: Colors.red,
+            content: Text(result.message ?? 'Gagal membuat bill'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
     }
   }
 
+  InputDecoration _inputDecoration(
+    String label, {
+    String? prefix,
+    IconData? icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixText: prefix,
+      prefixIcon: icon != null
+          ? Icon(icon, color: AppColors.textMuted, size: 20)
+          : null,
+      labelStyle: const TextStyle(color: AppColors.textMuted),
+      filled: true,
+      fillColor: AppColors.surfaceLight,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.surfaceBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.error),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      isDense: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Create Bill'),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Buat Bill Manual',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -148,35 +167,44 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
                     // Store name
                     TextFormField(
                       controller: _storeNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Store/Restaurant Name',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.store),
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: _inputDecoration(
+                        'Nama Toko / Restoran',
+                        icon: Icons.store_rounded,
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter store name';
-                        }
+                        if (value == null || value.trim().isEmpty)
+                          return 'Masukkan nama toko';
                         return null;
                       },
                     ),
                     const SizedBox(height: 24),
 
-                    // Items section
+                    // Items header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
                           'Items',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: _addItem,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Add Item'),
+                        SizedBox(
+                          height: 34,
+                          child: TextButton.icon(
+                            onPressed: _addItem,
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text(
+                              'Tambah',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -187,22 +215,22 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _items.length,
-                      itemBuilder: (context, index) {
-                        return _buildItemCard(index);
-                      },
+                      itemBuilder: (context, index) => _buildItemCard(index),
                     ),
                     const SizedBox(height: 24),
 
-                    // Tax and service charge
+                    // Tax & service charge
                     Row(
                       children: [
                         Expanded(
                           child: TextFormField(
                             controller: _taxController,
-                            decoration: const InputDecoration(
-                              labelText: 'Tax',
-                              border: OutlineInputBorder(),
-                              prefixText: 'Rp ',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                            ),
+                            decoration: _inputDecoration(
+                              'Pajak',
+                              prefix: 'Rp ',
                             ),
                             keyboardType: TextInputType.number,
                             inputFormatters: [
@@ -211,14 +239,16 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextFormField(
                             controller: _serviceChargeController,
-                            decoration: const InputDecoration(
-                              labelText: 'Service Charge',
-                              border: OutlineInputBorder(),
-                              prefixText: 'Rp ',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                            ),
+                            decoration: _inputDecoration(
+                              'Service',
+                              prefix: 'Rp ',
                             ),
                             keyboardType: TextInputType.number,
                             inputFormatters: [
@@ -234,50 +264,35 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
               ),
             ),
 
-            // Summary and create button
+            // Bottom summary
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.surfaceBorder)),
               ),
               child: SafeArea(
                 child: Column(
                   children: [
                     _buildSummaryRow('Subtotal', _subtotal),
-                    _buildSummaryRow('Tax', _tax),
+                    _buildSummaryRow('Pajak', _tax),
                     _buildSummaryRow('Service Charge', _serviceCharge),
-                    const Divider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Container(
+                        height: 1,
+                        color: AppColors.surfaceBorder,
+                      ),
+                    ),
                     _buildSummaryRow('Grand Total', _grandTotal, isBold: true),
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      height: 52,
+                      child: GradientButton(
                         onPressed: _isLoading ? null : _createBill,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Create Bill',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                        label: 'Buat Bill',
+                        icon: Icons.receipt_long_rounded,
                       ),
                     ),
                   ],
@@ -292,92 +307,111 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
 
   Widget _buildItemCard(int index) {
     final item = _items[index];
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Item ${index + 1}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GlassCard(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                ),
-                if (_items.length > 1)
-                  IconButton(
-                    onPressed: () => _removeItem(index),
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    constraints: const BoxConstraints(),
-                    padding: EdgeInsets.zero,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Item ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: item.nameController,
-              decoration: const InputDecoration(
-                labelText: 'Item Name',
-                border: OutlineInputBorder(),
-                isDense: true,
+                  if (_items.length > 1)
+                    IconButton(
+                      onPressed: () => _removeItem(index),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                    ),
+                ],
               ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 80,
-                  child: TextFormField(
-                    controller: item.quantityController,
-                    decoration: const InputDecoration(
-                      labelText: 'Qty',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: item.priceController,
-                    decoration: const InputDecoration(
-                      labelText: 'Unit Price',
-                      border: OutlineInputBorder(),
-                      prefixText: 'Rp ',
-                      isDense: true,
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Rp ${_formatNumber(item.total)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: item.nameController,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: _inputDecoration('Nama Item'),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 80,
+                    child: TextFormField(
+                      controller: item.quantityController,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: _inputDecoration('Qty'),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextFormField(
+                      controller: item.priceController,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: _inputDecoration(
+                        'Harga Satuan',
+                        prefix: 'Rp ',
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Rp ${_formatNumber(item.total)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -385,23 +419,24 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
 
   Widget _buildSummaryRow(String label, double amount, {bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 18 : 14,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
+              fontSize: isBold ? 17 : 14,
+              color: isBold ? AppColors.textPrimary : AppColors.textSecondary,
             ),
           ),
           Text(
             'Rp ${_formatNumber(amount)}',
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 18 : 14,
-              color: isBold ? Colors.deepPurple : null,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w400,
+              fontSize: isBold ? 17 : 14,
+              color: isBold ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
         ],
@@ -414,7 +449,7 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
         .toStringAsFixed(0)
         .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
+          (m) => '${m[1]}.',
         );
   }
 }
