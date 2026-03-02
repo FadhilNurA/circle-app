@@ -318,13 +318,14 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     );
   }
 
-  Widget _avatar(String? name, String? url) {
+  Widget _avatar(String? name, String? url, {double size = 40}) {
     final l = (name ?? 'U').substring(0, 1).toUpperCase();
+    final color = AppColors.avatarColor(name ?? 'U');
     return Container(
-      width: 40,
-      height: 40,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        color: color.withOpacity(0.15),
         shape: BoxShape.circle,
         image: url != null
             ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
@@ -334,10 +335,10 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
           ? Center(
               child: Text(
                 l,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: color,
                   fontWeight: FontWeight.w700,
-                  fontSize: 15,
+                  fontSize: size * 0.38,
                 ),
               ),
             )
@@ -350,10 +351,28 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(
-          _bill?.storeName ?? 'Detail Bill',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _bill?.storeName ?? 'Detail Tagihan',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const Text(
+              'Lihat rincian',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
+        toolbarHeight: 64,
         actions: [
           if (_bill != null && !_bill!.isCompleted)
             PopupMenuButton(
@@ -560,7 +579,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Items',
+          'Daftar Item',
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
@@ -659,7 +678,7 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _avatar(split.user?.username, null),
+                            _avatar(split.user?.username, null, size: 24),
                             const SizedBox(width: 6),
                             Text(
                               'Rp ${_formatNumber(split.shareAmount)}',

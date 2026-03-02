@@ -134,10 +134,29 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Musik Bersama 🎵',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Musik Bersama 🎵',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              'Dengarkan musik bareng',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
+        toolbarHeight: 64,
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -150,6 +169,8 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
             _buildDivider(),
             const SizedBox(height: 20),
             _buildJoinRoomSection(),
+            const SizedBox(height: 24),
+            _buildTipsCard(),
           ],
         ),
       ),
@@ -437,6 +458,55 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTipsCard() {
+    return GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: AppColors.info,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tips',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Dapatkan Spotify Access Token dari developer.spotify.com untuk membuat room.',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

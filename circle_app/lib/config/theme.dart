@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 
-/// ─── Circle App Design System ───
+/// ─── Circle App Design System (Light Theme) ───
 /// Unified colors, typography, and component styles.
 
 class AppColors {
   // Primary palette
-  static const Color primary = Color(0xFF7C3AED); // vivid purple
+  static const Color primary = Color(0xFF7C3AED);
   static const Color primaryLight = Color(0xFF9F67FF);
   static const Color primaryDark = Color(0xFF5B21B6);
 
   // Accent / secondary
-  static const Color accent = Color(0xFF06B6D4); // cyan
+  static const Color accent = Color(0xFF06B6D4);
   static const Color accentLight = Color(0xFF22D3EE);
 
-  // Backgrounds
-  static const Color background = Color(0xFF0F0F1A); // deep navy-black
-  static const Color surface = Color(0xFF1A1A2E); // card surface
-  static const Color surfaceLight = Color(0xFF252542); // lighter surface
-  static const Color surfaceBorder = Color(0xFF2D2D4A); // subtle borders
+  // Backgrounds (light theme)
+  static const Color background = Color(0xFFF5F5F5);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceLight = Color(0xFFF3F4F6);
+  static const Color surfaceBorder = Color(0xFFE5E7EB);
 
-  // Text
-  static const Color textPrimary = Color(0xFFF1F1F6);
-  static const Color textSecondary = Color(0xFF9CA3AF);
-  static const Color textMuted = Color(0xFF6B7280);
+  // Text (dark on light)
+  static const Color textPrimary = Color(0xFF1F2937);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textMuted = Color(0xFF9CA3AF);
 
   // Status
   static const Color success = Color(0xFF10B981);
@@ -38,7 +38,7 @@ class AppColors {
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+    colors: [Color(0xFF7C3AED), Color(0xFF9333EA)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -48,15 +48,31 @@ class AppColors {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Generate a deterministic avatar color from a name/initial
+  static Color avatarColor(String name) {
+    final colors = [
+      const Color(0xFF7C3AED), // purple
+      const Color(0xFF06B6D4), // cyan
+      const Color(0xFFEC4899), // pink
+      const Color(0xFFF59E0B), // amber
+      const Color(0xFF10B981), // emerald
+      const Color(0xFF3B82F6), // blue
+      const Color(0xFFEF4444), // red
+      const Color(0xFF8B5CF6), // violet
+    ];
+    final idx = name.isEmpty ? 0 : name.codeUnitAt(0) % colors.length;
+    return colors[idx];
+  }
 }
 
 class AppTheme {
-  static ThemeData get darkTheme {
+  static ThemeData get lightTheme {
     return ThemeData(
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       useMaterial3: true,
       scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
         secondary: AppColors.accent,
         surface: AppColors.surface,
@@ -72,7 +88,7 @@ class AppTheme {
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 18,
@@ -85,11 +101,12 @@ class AppTheme {
       // Bottom Navigation
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primary.withOpacity(0.2),
+        indicatorColor: AppColors.primary.withOpacity(0.12),
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
         labelTextStyle: WidgetStatePropertyAll(
           const TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
           ),
@@ -105,7 +122,6 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.surfaceBorder, width: 1),
         ),
         margin: const EdgeInsets.only(bottom: 12),
       ),
@@ -120,11 +136,11 @@ class AppTheme {
         suffixIconColor: AppColors.textMuted,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -174,7 +190,7 @@ class AppTheme {
       // Text buttons
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryLight,
+          foregroundColor: AppColors.primary,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
@@ -193,7 +209,7 @@ class AppTheme {
         unselectedLabelColor: AppColors.textMuted,
         indicatorColor: AppColors.primary,
         indicatorSize: TabBarIndicatorSize.label,
-        dividerColor: AppColors.surfaceBorder,
+        dividerColor: Colors.transparent,
         labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         unselectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w500,
@@ -214,8 +230,8 @@ class AppTheme {
 
       // SnackBar
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.surfaceLight,
-        contentTextStyle: const TextStyle(color: AppColors.textPrimary),
+        backgroundColor: AppColors.textPrimary,
+        contentTextStyle: const TextStyle(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),
@@ -227,7 +243,7 @@ class AppTheme {
           color: AppColors.textSecondary,
           fontSize: 12,
         ),
-        side: const BorderSide(color: AppColors.surfaceBorder),
+        side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
 
@@ -251,7 +267,7 @@ class AppTheme {
 
       // PopupMenu
       popupMenuTheme: PopupMenuThemeData(
-        color: AppColors.surfaceLight,
+        color: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
 
@@ -375,7 +391,7 @@ class GradientButton extends StatelessWidget {
   }
 }
 
-/// Reusable glass-morphism card
+/// Reusable card with soft shadow (light theme)
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding;
@@ -391,7 +407,13 @@ class GlassCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.surfaceBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: child,
     );

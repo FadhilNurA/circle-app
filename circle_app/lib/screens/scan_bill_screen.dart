@@ -381,11 +381,12 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
 
   Widget _avatar(String? name, String? url) {
     final l = (name ?? 'U').substring(0, 1).toUpperCase();
+    final color = AppColors.avatarColor(name ?? 'U');
     return Container(
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        color: color.withOpacity(0.15),
         shape: BoxShape.circle,
         image: url != null
             ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
@@ -395,8 +396,8 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
           ? Center(
               child: Text(
                 l,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: color,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
@@ -411,10 +412,28 @@ class _ScanBillScreenState extends State<ScanBillScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Scan & Split Bill',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Scan Struk',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              'AI powered scanning',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
+        toolbarHeight: 64,
         actions: [
           if (_imageBytes != null && _items.isNotEmpty)
             Padding(

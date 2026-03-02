@@ -149,10 +149,28 @@ class _CreateBillScreenState extends State<CreateBillScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Buat Bill Manual',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Buat Tagihan',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              'Input manual',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
+        toolbarHeight: 64,
       ),
       body: Form(
         key: _formKey,

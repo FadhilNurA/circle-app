@@ -98,7 +98,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 height: 72,
                 decoration: BoxDecoration(
                   gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(22),
+                  shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: AppColors.primary.withOpacity(0.3),
@@ -302,23 +302,21 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   }
 
   Widget _avatar(String name, String? url, double size) {
+    final color = AppColors.avatarColor(name);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(size * 0.35),
+        color: color.withOpacity(0.15),
+        shape: BoxShape.circle,
       ),
       child: url != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(size * 0.35),
-              child: Image.network(url, fit: BoxFit.cover),
-            )
+          ? ClipOval(child: Image.network(url, fit: BoxFit.cover))
           : Center(
               child: Text(
                 name.substring(0, 1).toUpperCase(),
                 style: TextStyle(
-                  color: Colors.white,
+                  color: color,
                   fontSize: size * 0.4,
                   fontWeight: FontWeight.w700,
                 ),
